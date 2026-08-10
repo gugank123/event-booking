@@ -1,0 +1,58 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ page_title }}{% endblock %} | Event Booking</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'event_list' %}">Event Ticketing Platform</a>
+            <div class="ms-auto">
+                <a class="btn btn-outline-light btn-sm" href="/admin/">Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container my-4">
+        <h1 class="mb-4">Upcoming Events</h1>
+
+        {% if events %}
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                {% for event in events %}
+                    <div class="col">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body">
+                                <span class="badge bg-primary mb-2">{{ event.category }}</span>
+                                <h5 class="card-title">{{ event.title }}</h5>
+                                <p class="card-text text-muted">{{ event.description|truncatewords:25 }}</p>
+                                <ul class="list-unstyled small mb-3">
+                                    <li><strong>Date:</strong> {{ event.date }}</li>
+                                    <li><strong>Time:</strong> {{ event.time }}</li>
+                                    <li><strong>Venue:</strong> {{ event.venue }}</li>
+                                    <li><strong>Price:</strong> Rs. {{ event.price }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info text-center py-5" role="alert">
+                <h4>No upcoming events available.</h4>
+                <p class="mb-0">Please check back later.</p>
+            </div>
+        {% endif %}
+    </main>
+
+    <footer class="text-center text-muted py-4">
+        <small>Event Ticketing &amp; Seat Booking Platform &mdash; Capstone Project</small>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
