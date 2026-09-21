@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -26,9 +27,32 @@ export default function Register() {
     }
   }
 
+  async function handleGoogle(idToken, googleError) {
+    if (googleError) {
+      setError(googleError);
+      return;
+    }
+    if (!idToken) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      // New Google users get the role selected below; existing users keep theirs.
+      await loginWithGoogle(idToken, role);
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="page page--narrow">
       <h1>Create an account</h1>
+      <GoogleSignInButton onCredential={handleGoogle} text="signup_with" />
+      <div className="divider">
+        <span>or with email</span>
+      </div>
       <form className="form" onSubmit={handleSubmit}>
         <label>
           Name

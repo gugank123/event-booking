@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { formatDate, formatMoney, formatTime } from '../utils/format';
+import { Stars } from '../components/Stars';
+import Reviews from '../components/Reviews';
+import WishlistButton from '../components/WishlistButton';
+import ContactOrganizer from '../components/ContactOrganizer';
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -20,16 +25,25 @@ export default function EventDetail() {
   const [checkoutError, setCheckoutError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
+    // Pass the token when signed in so the response includes is_wishlisted.
     api
-      .get(`/events/${id}/`)
+      .get(`/events/${id}/`, token)
       .then((data) => {
         setEvent(data.event);
         if (data.event.ticket_types.length > 0) setTicketTypeId(data.event.ticket_types[0].id);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+  }, [id, token]);
+
+  useEffect(() => {
+    api
+      .get(`/comms/announcements/event/${id}/`)
+      .then((data) => setAnnouncements(data.announcements))
+      .catch(() => {});
   }, [id]);
 
   if (loading) return <div className="page">Loading…</div>;
@@ -81,7 +95,7 @@ export default function EventDetail() {
         <div className="confirmation">
           <span className="confirmation__badge">Booking confirmed</span>
           <h1>You're going to {event.title}</h1>
-          <p className="muted">A confirmation isn't emailed in this demo — save your reference below.</p>
+          <p className="muted">A confirmation email was sent — save your reference below too.</p>
           <div className="confirmation__ticket">
             <div>
               <span className="confirmation__label">Reference</span>
@@ -106,14 +120,45 @@ export default function EventDetail() {
 
   return (
     <div className="page event-detail">
-      <div className="event-detail__main">
-        <span className="ticket-card__category">{event.category}</span>
-        <h1>{event.title}</h1>
-        <p className="event-detail__meta">
-          {formatDate(event.starts_at)} at {formatTime(event.starts_at)} · {event.venue}, {event.city}
-        </p>
-        <p className="event-detail__organizer">Hosted by {event.organizer_name}</p>
-        {event.description && <p className="event-detail__description">{event.description}</p>}
+      <div>
+        <motion.div
+          className="event-detail__main"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+        >
+          <span className="ticket-card__category">{event.category}</span>
+          {event.is_featured && <span className="featured-badge">Featured</span>}
+          <h1>{event.title}</h1>
+          <p className="event-detail__meta">
+            {formatDate(event.starts_at)} at {formatTime(event.starts_at)} · {event.venue}, {event.city}
+          </p>
+          <p className="event-detail__organizer">Hosted by {event.organizer_name}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0.5rem 0' }}>
+            <Stars value={event.avg_rating} />
+            {event.review_count > 0 && <span className="muted">({event.review_count} reviews)</span>}
+            {event.tickets_sold > 0 && <span className="muted">· {event.tickets_sold} tickets sold</span>}
+            <WishlistButton eventId={event.id} initial={!!event.is_wishlisted} inline />          </div>
+          {event.description && <p className="event-detail__description">{event.description}</p>}
+          <div style={{ marginTop: '1rem' }}>
+            <ContactOrganizer eventId={event.id} eventTitle={event.title} />
+          </div>
+        </motion.div>
+        {announcements.length > 0 && (
+          <section className="announcements">
+            <h2>Announcements from the organizer</h2>
+            {announcements.map((a) => (
+              <div key={a.id} className="review">
+                <div className="review__head">
+                  <span className="review__author">{a.title}</span>
+                  <span className="review__date">{formatDate(a.created_at)}</span>
+                </div>
+                <p>{a.message}</p>
+              </div>
+            ))}
+          </section>
+        )}
+        <Reviews eventId={event.id} />
       </div>
 
       <aside className="checkout-panel">

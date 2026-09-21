@@ -1,0 +1,11 @@
+Hi {{ user.first_name|default:user.email }},
+
+Your support ticket #{{ ticket.id }} ("{{ ticket.subject }}") is now: {{ ticket.status }}.
+
+{% if reply_body %}Latest reply:
+{{ reply_body }}
+
+{% endif %}View the full conversation: {{ frontend_url }}/support/{{ ticket.id }}
+
+{{ support_email }}
+EventFlow Support

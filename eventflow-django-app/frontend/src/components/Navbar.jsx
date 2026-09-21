@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -17,11 +18,16 @@ export default function Navbar() {
       </Link>
       <nav className="navbar__links">
         <Link to="/">Browse</Link>
-        {user?.role === 'organizer' && <Link to="/organizer">Manage events</Link>}
+        <Link to="/post-event">＋ Post an event</Link>
+        {(user?.role === 'organizer' || user?.role === 'admin') && <Link to="/organizer">Manage events</Link>}
         {user?.role === 'admin' && <Link to="/admin">Admin</Link>}
         {user && <Link to="/my-bookings">My tickets</Link>}
+        {user && <Link to="/wishlist">Wishlist</Link>}
+        {user && <Link to="/messages">Messages</Link>}
+        <Link to="/help">Help</Link>
       </nav>
       <div className="navbar__actions">
+        {user && <NotificationBell />}
         {user ? (
           <>
             <span className="navbar__user">{user.name}</span>

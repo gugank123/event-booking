@@ -1,0 +1,5 @@
+<p>Hi {{ user.first_name|default:user.email }},</p>
+<p>Welcome to <strong>EventFlow</strong> — you're all set to discover concerts, conferences, comedy and more.</p>
+<p><a href="{{ frontend_url }}/">Browse events</a> · <a href="{{ frontend_url }}/my-bookings">Your tickets</a></p>
+<p>Need a hand? Visit <a href="{{ frontend_url }}/help">the Help Center</a> or write to {{ support_email }}.</p>
+<p>Enjoy the show!<br>The EventFlow team</p>

@@ -1,0 +1,7 @@
+<p>Hi {{ user.first_name|default:user.email }},</p>
+<p><strong>{{ subject }}</strong></p>
+<p>{{ body|linebreaksbr }}</p>
+{% if event %}<p>Event: <a href="{{ frontend_url }}/events/{{ event.id }}">{{ event.title }}</a></p>{% endif %}
+{% if booking %}<p>Booking reference: {{ booking.reference }}</p>{% endif %}
+<p>You can reply in <a href="{{ frontend_url }}/messages">your messages</a>.</p>
+<p>EventFlow</p>

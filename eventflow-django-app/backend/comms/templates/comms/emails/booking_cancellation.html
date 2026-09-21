@@ -1,0 +1,4 @@
+<p>Hi {{ user.first_name|default:user.email }},</p>
+<p>Your booking <strong>{{ booking.reference }}</strong> for {{ event.title }} has been cancelled.</p>
+<p>No further action is needed. If this wasn't you, please contact us via <a href="{{ frontend_url }}/help">the Help Center</a>.</p>
+<p>EventFlow</p>

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState('');
@@ -25,9 +26,31 @@ export default function Login() {
     }
   }
 
+  async function handleGoogle(idToken, googleError) {
+    if (googleError) {
+      setError(googleError);
+      return;
+    }
+    if (!idToken) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      await loginWithGoogle(idToken);
+      navigate(location.state?.from || '/');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="page page--narrow">
       <h1>Log in</h1>
+      <GoogleSignInButton onCredential={handleGoogle} text="signin_with" />
+      <div className="divider">
+        <span>or with email</span>
+      </div>
       <p className="muted">
         Demo accounts (password: <code>password123</code>): admin@eventflow.dev · organizer@eventflow.dev ·
         attendee@eventflow.dev

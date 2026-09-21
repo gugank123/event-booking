@@ -1,0 +1,8 @@
+<p>Hi {{ user.first_name|default:user.email }},</p>
+<p>Important update for <strong>{{ event.title }}</strong>:</p>
+<ul>
+{% for change in changes %}  <li>{{ change }}</li>
+{% endfor %}</ul>
+<p><a href="{{ frontend_url }}/events/{{ event.id }}">Event details</a> · <a href="{{ frontend_url }}/my-bookings">Your tickets</a></p>
+<p>If this change doesn't work for you, you can cancel from My tickets where permitted.</p>
+<p>EventFlow</p>

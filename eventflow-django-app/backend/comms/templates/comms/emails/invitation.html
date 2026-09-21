@@ -1,0 +1,11 @@
+<p><strong>You're invited!</strong></p>
+<ul>
+  <li><strong>Event:</strong> {{ event.title }}</li>
+  <li><strong>When:</strong> {{ event.starts_at }}</li>
+  <li><strong>Where:</strong> {{ event.venue }}, {{ event.city }}</li>
+  <li><strong>Hosted by:</strong> {{ event.organizer.get_full_name|default:event.organizer.email }}</li>
+</ul>
+{% if invitation.message %}<p>A note from the organizer:<br><em>"{{ invitation.message }}"</em></p>{% endif %}
+<p><a href="{{ frontend_url }}/invite/{{ invitation.token }}">View and respond to your invitation</a></p>
+<p>Accepting takes you to the event page (no seat is booked automatically).</p>
+<p>See you there!<br>EventFlow</p>

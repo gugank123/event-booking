@@ -1,0 +1,12 @@
+Hi {{ user.first_name|default:user.email }},
+
+{{ subject }}
+
+{{ body }}
+
+{% if event %}Event: {{ event.title }} ({{ frontend_url }}/events/{{ event.id }}){% endif %}
+{% if booking %}Booking reference: {{ booking.reference }}{% endif %}
+
+You can reply in your messages: {{ frontend_url }}/messages
+
+EventFlow

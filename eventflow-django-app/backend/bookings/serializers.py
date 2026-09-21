@@ -11,12 +11,15 @@ class EventRosterBookingSerializer(serializers.ModelSerializer):
     ticketTypeName = serializers.CharField(source="ticket_type.name", read_only=True)
     totalAmount = serializers.DecimalField(source="total_amount", max_digits=10, decimal_places=2, read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    checkedIn = serializers.BooleanField(source="checked_in", read_only=True)
+    checkedInAt = serializers.DateTimeField(source="checked_in_at", read_only=True)
 
     class Meta:
         model = Booking
         fields = [
             "id", "attendeeName", "attendeeEmail", "ticketTypeName", "quantity",
             "totalAmount", "reference", "status", "createdAt",
+            "checkedIn", "checkedInAt",
         ]
 
     def get_attendeeName(self, obj):
@@ -39,12 +42,15 @@ class MyBookingSerializer(serializers.ModelSerializer):
     totalAmount = serializers.DecimalField(source="total_amount", max_digits=10, decimal_places=2, read_only=True)
     cardLast4 = serializers.CharField(source="card_last4", read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    checkedIn = serializers.BooleanField(source="checked_in", read_only=True)
+    checkedInAt = serializers.DateTimeField(source="checked_in_at", read_only=True)
 
     class Meta:
         model = Booking
         fields = [
             "id", "event", "ticketTypeName", "quantity", "totalAmount",
             "reference", "status", "cardLast4", "createdAt",
+            "checkedIn", "checkedInAt",
         ]
 
 

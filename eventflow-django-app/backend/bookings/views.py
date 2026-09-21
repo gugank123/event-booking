@@ -1,16 +1,19 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from comms.emails import send_booking_cancellation_email, send_booking_confirmation_email
+from comms.services import notify_user
 from events.models import Event, TicketType
 
 from .models import Booking
-from .serializers import CheckoutSerializer, MyBookingSerializer
+from .serializers import CheckoutSerializer, EventRosterBookingSerializer, MyBookingSerializer
 
 
 class BookingCreateView(APIView):
@@ -49,6 +52,17 @@ class BookingCreateView(APIView):
                 total_amount=total_amount,
                 card_last4=data["cardNumber"][-4:],
             )
+
+        send_booking_confirmation_email(request.user, booking, event, ticket_type)
+        notify_user(
+            request.user,
+            f"Booking confirmed: {event.title}",
+            f"{booking.quantity} x {ticket_type.name} - ref {booking.reference}.",
+            category="BOOKING",
+            link="/my-bookings",
+            event=event,
+            booking=booking,
+        )
 
         return Response(
             {
@@ -92,9 +106,60 @@ class BookingCancelView(APIView):
             ticket_type.quantity_sold = max(0, ticket_type.quantity_sold - booking.quantity)
             ticket_type.save()
             booking.status = Booking.Status.CANCELLED
-            from django.utils import timezone
-
             booking.cancelled_at = timezone.now()
             booking.save()
 
+        event = booking.event
+        send_booking_cancellation_email(booking.user, booking, event)
+        notify_user(
+            booking.user,
+            f"Booking cancelled: {event.title}",
+            f"Booking {booking.reference} was cancelled.",
+            category="BOOKING",
+            link="/my-bookings",
+            event=event,
+            booking=booking,
+        )
+
         return Response({"booking": MyBookingSerializer(booking).data})
+
+
+def can_manage_event(user, event):
+    return user.role == "admin" or event.organizer_id == user.id
+
+
+class BookingCheckInView(APIView):
+    """Door check-in: mark a confirmed booking as checked in."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        booking = get_object_or_404(Booking.objects.select_related("event"), pk=pk)
+        if not can_manage_event(request.user, booking.event):
+            raise PermissionDenied("You don't have permission to check in this booking.")
+        if booking.status != Booking.Status.CONFIRMED:
+            return Response({"error": "Only confirmed bookings can be checked in."}, status=409)
+        if booking.checked_in:
+            return Response({"error": "This ticket is already checked in."}, status=409)
+        booking.checked_in = True
+        booking.checked_in_at = timezone.now()
+        booking.save()
+        return Response({"booking": EventRosterBookingSerializer(booking).data})
+
+
+class BookingLookupView(APIView):
+    """Find a booking by ticket reference (for scanning/typing at the door)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        reference = (request.query_params.get("reference") or "").strip().upper()
+        if not reference:
+            return Response({"error": "Provide a ticket reference."}, status=400)
+        booking = get_object_or_404(
+            Booking.objects.select_related("event", "ticket_type", "user"),
+            reference=reference,
+        )
+        if not can_manage_event(request.user, booking.event):
+            raise PermissionDenied("You don't have permission to view this booking.")
+        return Response({"booking": EventRosterBookingSerializer(booking).data})

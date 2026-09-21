@@ -1,0 +1,11 @@
+Hi {{ user.first_name|default:user.email }},
+
+Welcome to EventFlow — you're all set to discover concerts, conferences, comedy and more.
+
+Browse events: {{ frontend_url }}/
+Your tickets, anytime: {{ frontend_url }}/my-bookings
+
+Need a hand? Visit {{ frontend_url }}/help or reply to {{ support_email }}.
+
+Enjoy the show!
+The EventFlow team

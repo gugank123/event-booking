@@ -1,0 +1,12 @@
+<p>Hi {{ user.first_name|default:user.email }},</p>
+<p>Your booking is confirmed:</p>
+<ul>
+  <li><strong>Event:</strong> {{ event.title }}</li>
+  <li><strong>When:</strong> {{ event.starts_at }}</li>
+  <li><strong>Where:</strong> {{ event.venue }}, {{ event.city }}</li>
+  <li><strong>Tickets:</strong> {{ booking.quantity }} x {{ ticket_type.name }}</li>
+  <li><strong>Total:</strong> ${{ booking.total_amount }}</li>
+  <li><strong>Reference:</strong> {{ booking.reference }}</li>
+</ul>
+<p>Show the QR code on your ticket at the door — see <a href="{{ frontend_url }}/my-bookings">My tickets</a>.</p>
+<p>Enjoy the show!<br>EventFlow</p>

@@ -1,0 +1,5 @@
+<p>Hi {{ user.first_name|default:user.email }},</p>
+<p>Your support ticket <strong>#{{ ticket.id }}</strong> ("{{ ticket.subject }}") is now: <strong>{{ ticket.status }}</strong>.</p>
+{% if reply_body %}<p>Latest reply:</p><p><em>{{ reply_body|linebreaksbr }}</em></p>{% endif %}
+<p><a href="{{ frontend_url }}/support/{{ ticket.id }}">View the full conversation</a></p>
+<p>{{ support_email }}<br>EventFlow Support</p>

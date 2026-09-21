@@ -1,0 +1,10 @@
+Hi {{ user.first_name|default:user.email }},
+
+{{ announcement.title }} — {{ event.title }}:
+
+{{ announcement.message }}
+
+Event details: {{ frontend_url }}/events/{{ event.id }}
+Your tickets: {{ frontend_url }}/my-bookings
+
+EventFlow

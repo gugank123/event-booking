@@ -35,9 +35,14 @@ export default function OrganizerDashboard() {
     <div className="page">
       <div className="page-header">
         <h1>Your events</h1>
-        <Link className="btn btn--primary" to="/organizer/new">
-          Create event
-        </Link>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link className="btn btn--ghost" to="/messages">
+            Customer messages
+          </Link>
+          <Link className="btn btn--primary" to="/organizer/new">
+            Create event
+          </Link>
+        </div>
       </div>
       {error && <p className="form-error">{error}</p>}
       {loading ? (

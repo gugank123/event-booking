@@ -116,6 +116,57 @@ frontend/
   `npm run build` and deploy the `dist/` folder, with `VITE_API_URL` set to
   your deployed backend's `/api` URL at build time.
 
+## Communications, support & invitations
+
+Beyond booking, the platform now includes a full communication layer
+(`backend/comms/`, mounted at `/api/comms/`):
+
+- **Notification center** — every booking, event update, message, invitation
+  and support reply creates an in-app notification. Bell icon with unread
+  count in the navbar, `/notifications` page (filter unread, mark
+  read/all-read, delete).
+- **Organizer → attendees** — from an event's Manage page: post an
+  **announcement** (in-app and/or email to all confirmed attendees) or send a
+  **message broadcast**. Editing date/venue/city/status on an event
+  automatically notifies confirmed attendees (in-app + email).
+- **Customer → organizer** — "Contact Organizer" on every event page and
+  booking auto-attaches the event/booking and opens a **conversation**
+  (`OPEN → IN_PROGRESS → RESOLVED → CLOSED`). Both sides reply from
+  `/messages`; organizers see customer threads there too.
+- **Invitations** — organizers invite by email from the event Manage page.
+  Guests get an email + in-app notification with a token link
+  (`/invite/<token>/`); accepting opens the event page (no seat auto-booked).
+- **Help Center** (`/help`) — searchable FAQs seeded by migration, support
+  contact details from settings, links to tickets and reports.
+- **Support tickets** (`/support`) — `OPEN → IN_PROGRESS → WAITING_FOR_USER →
+  RESOLVED → CLOSED`, priorities, admin assignment, full reply history, email
+  updates. Admins manage everything in Django admin too.
+- **Reports** — users file event/organizer/booking/payment/technical reports;
+  admins triage them in Django admin.
+- **Email service** (`comms/emails.py` + `comms/templates/comms/emails/`) —
+  templated text+HTML mail for welcome, booking confirmation/cancellation,
+  invitations, announcements, organizer messages, support updates and event
+  updates. Console backend by default; set `EMAIL_BACKEND` + SMTP vars for
+  real mail. Mail failures never break requests.
+
+### Extra environment variables
+
+```
+FRONTEND_URL=http://localhost:5173   # links inside emails
+SUPPORT_EMAIL=support@eventflow.dev  # shown on Help page
+SUPPORT_PHONE=                       # optional, shown on Help page
+```
+
+### Running & testing
+
+```bash
+cd backend
+venv\Scripts\python manage.py migrate   # includes comms + FAQ seeds
+venv\Scripts\python manage.py test      # 12 workflow tests (auth, booking, comms, IDOR)
+```
+
+Or double-click `start_app.bat` (starts MySQL if needed, Django, React, Chrome).
+
 ## Going further
 
 - **Real payments:** replace the validation in `bookings/serializers.py`

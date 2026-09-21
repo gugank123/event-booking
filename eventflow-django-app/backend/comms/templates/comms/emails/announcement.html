@@ -1,0 +1,5 @@
+<p>Hi {{ user.first_name|default:user.email }},</p>
+<p><strong>{{ announcement.title }}</strong> — {{ event.title }}:</p>
+<p>{{ announcement.message|linebreaksbr }}</p>
+<p><a href="{{ frontend_url }}/events/{{ event.id }}">Event details</a> · <a href="{{ frontend_url }}/my-bookings">Your tickets</a></p>
+<p>EventFlow</p>

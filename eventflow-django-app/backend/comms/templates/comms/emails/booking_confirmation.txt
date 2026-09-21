@@ -1,0 +1,15 @@
+Hi {{ user.first_name|default:user.email }},
+
+Your booking is confirmed:
+
+  Event: {{ event.title }}
+  When: {{ event.starts_at }}
+  Where: {{ event.venue }}, {{ event.city }}
+  Tickets: {{ booking.quantity }} x {{ ticket_type.name }}
+  Total: ${{ booking.total_amount }}
+  Reference: {{ booking.reference }}
+
+Show the QR code on your ticket at the door — see {{ frontend_url }}/my-bookings.
+
+Enjoy the show!
+EventFlow

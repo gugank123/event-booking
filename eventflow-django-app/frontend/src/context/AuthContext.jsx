@@ -53,6 +53,12 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
+  const loginWithGoogle = useCallback(async (idToken, role) => {
+    const data = await api.post('/auth/google/', { idToken, role });
+    persistSession(data);
+    return data.user;
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('eventflow_access');
     localStorage.removeItem('eventflow_refresh');
@@ -61,7 +67,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ token, user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ token, user, loading, login, register, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

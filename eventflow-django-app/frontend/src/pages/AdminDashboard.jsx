@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { formatDate, formatMoney } from '../utils/format';
+
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '');
 
 export default function AdminDashboard() {
   const { token, user } = useAuth();
@@ -43,7 +46,20 @@ export default function AdminDashboard() {
 
   return (
     <div className="page">
-      <h1>Admin</h1>
+      <div className="page-header">
+        <h1>Admin</h1>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <Link className="btn btn--primary btn--sm" to="/organizer/new">
+            ＋ Post event
+          </Link>
+          <Link className="btn btn--ghost btn--sm" to="/organizer">
+            Manage events
+          </Link>
+          <a className="btn btn--ghost btn--sm" href={`${API_BASE}/admin/`} target="_blank" rel="noreferrer">
+            Django admin ↗
+          </a>
+        </div>
+      </div>
       {error && <p className="form-error">{error}</p>}
 
       <div className="filter-row">

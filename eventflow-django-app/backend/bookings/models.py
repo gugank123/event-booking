@@ -26,6 +26,8 @@ class Booking(models.Model):
     reference = models.CharField(max_length=20, unique=True, default=generate_reference)
     payment_method = models.CharField(max_length=20, default="mock-card")
     card_last4 = models.CharField(max_length=4)
+    checked_in = models.BooleanField(default=False)
+    checked_in_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
 

@@ -1,0 +1,17 @@
+You're invited!
+
+  Event: {{ event.title }}
+  When: {{ event.starts_at }}
+  Where: {{ event.venue }}, {{ event.city }}
+  Hosted by: {{ event.organizer.get_full_name|default:event.organizer.email }}
+
+{% if invitation.message %}A note from the organizer:
+"{{ invitation.message }}"
+
+{% endif %}View and respond to your invitation:
+{{ frontend_url }}/invite/{{ invitation.token }}
+
+Accepting takes you to the event page (no seat is booked automatically).
+
+See you there!
+EventFlow

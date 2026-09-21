@@ -18,6 +18,7 @@ class Event(models.Model):
     ends_at = models.DateTimeField()
     image_url = models.URLField(blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PUBLISHED)
+    is_featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -40,3 +41,40 @@ class TicketType(models.Model):
     @property
     def remaining(self):
         return self.quantity_total - self.quantity_sold
+
+
+class Wishlist(models.Model):
+    """An attendee's saved-for-later events."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="wishlist")
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="wishlisted_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "event"], name="unique_wishlist_user_event")
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} ♥ {self.event.title}"
+
+
+class Review(models.Model):
+    """A 1–5 star rating plus optional comment, one per user per event."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews")
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="reviews")
+    rating = models.PositiveSmallIntegerField()
+    comment = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "event"], name="unique_review_user_event")
+        ]
+
+    def __str__(self):
+        return f"{self.rating}★ by {self.user.email} on {self.event.title}"
