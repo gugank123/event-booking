@@ -83,7 +83,11 @@ Admin panel: `https://YOUR-API.onrender.com/admin/`
 
 1. Sign up at https://vercel.com (GitHub login works).
 2. **Add New → Project → import your `eventflow` repo.**
-   - **Root Directory:** `frontend`.
+   - **Root Directory:** `eventflow-django-app/frontend` (the repo root
+     contains the `eventflow-django-app/` wrapper folder, so plain
+     `frontend` is wrong and produces a 404 — use the full nested path.
+     Alternatively leave Root Directory empty: the new `vercel.json` at the
+     repo root already points at `eventflow-django-app/frontend/dist`).
    - Framework preset: **Vite**. Build command `npm run build`, output `dist/`
      (pre-filled from `frontend/vercel.json`, which also handles page refreshes).
 3. **Environment Variables** (add before deploying):
