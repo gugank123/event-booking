@@ -8,6 +8,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('attendee');
   const [error, setError] = useState('');
@@ -18,8 +19,8 @@ export default function Register() {
     setError('');
     setSubmitting(true);
     try {
-      await register(name, email, password, role);
-      navigate('/');
+      await register(name, email, phone, password, role);
+      navigate(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -63,6 +64,15 @@ export default function Register() {
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label>
+          Phone (optional)
+          <input
+            type="tel"
+            value={phone}
+            placeholder="+91 …"
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </label>
+        <label>
           Password
           <input
             type="password"
@@ -73,7 +83,7 @@ export default function Register() {
           />
         </label>
         <fieldset className="role-choice">
-          <legend>I'm signing up to…</legend>
+          <legend>I&apos;m signing up to…</legend>
           <label className={`role-option ${role === 'attendee' ? 'is-selected' : ''}`}>
             <input type="radio" name="role" value="attendee" checked={role === 'attendee'} onChange={() => setRole('attendee')} />
             Book tickets to events

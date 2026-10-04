@@ -25,11 +25,15 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    "django_filters",
+    "drf_spectacular",
     "accounts",
     "events",
     "bookings",
     "comms",
+    "payments",
 ]
 
 MIDDLEWARE = [
@@ -65,13 +69,62 @@ TEMPLATES = [
 WSGI_APPLICATION = "eventflow.wsgi.application"
 
 # MySQL is the database. Locally the MYSQL_* vars in backend/.env are used;
-# on hosting platforms a single MYSQL_URL (e.g. Railway's connection string)
-# takes precedence when set. PyMySQL is the driver (pure Python).
+# on hosting platforms a single MYSQL_URL (e.g. Railway's connection string
+# or Aiven's service URI) takes precedence when set.
+# Aiven MySQL *requires* SSL with its CA certificate, so this block also
+# supports MYSQL_SSL_CA / MYSQL_SSL_CA_CONTENT (see below).
+# PyMySQL is the driver (pure Python).
 import dj_database_url
+import tempfile
+
+
+def _mysql_options():
+    """Build OPTIONS dict for Django's MySQL backend, with Aiven SSL if configured."""
+    options = {"charset": "utf8mb4"}
+    # Path to Aiven's ca.pem, or the PEM content itself. Both work so the same
+    # env vars function locally (file path) and on Render (paste content as
+    # a secret env var, since Render has no file upload for the CA).
+    ssl_ca = os.environ.get("MYSQL_SSL_CA", "").strip()
+    ssl_ca_content = os.environ.get("MYSQL_SSL_CA_CONTENT", "").strip()
+    ca_file = None
+    ca_dest = Path(os.environ.get("MYSQL_SSL_CA_FILE", str(Path(tempfile.gettempdir()) / "aiven-ca.pem")))
+    if ssl_ca_content.startswith("-----BEGIN"):
+        # Cert pasted directly into env var -> materialise as a file.
+        ca_file = ca_dest
+        try:
+            ca_file.parent.mkdir(parents=True, exist_ok=True)
+            if not ca_file.exists() or ca_file.read_text() != ssl_ca_content:
+                ca_file.write_text(ssl_ca_content)
+        except OSError:
+            ca_file = None
+    elif ssl_ca.startswith("-----BEGIN"):
+        ca_file = ca_dest
+        try:
+            ca_file.parent.mkdir(parents=True, exist_ok=True)
+            if not ca_file.exists() or ca_file.read_text() != ssl_ca:
+                ca_file.write_text(ssl_ca)
+        except OSError:
+            ca_file = None
+    elif ssl_ca:
+        candidate = Path(ssl_ca)
+        if candidate.is_file():
+            ca_file = candidate
+    # Local dev convenience: backend/ca.pem (downloaded from Aiven console)
+    # is picked up automatically if no env var is set.
+    if ca_file is None:
+        local_ca = BASE_DIR / "ca.pem"
+        if local_ca.is_file() and (
+            os.environ.get("MYSQL_URL", "") or "aivencloud" in os.environ.get("MYSQL_HOST", "")
+        ):
+            ca_file = local_ca
+    if ca_file is not None:
+        options["ssl"] = {"ca": str(ca_file)}
+    return options
+
 
 if os.environ.get("MYSQL_URL"):
     DATABASES = {"default": dj_database_url.parse(os.environ["MYSQL_URL"], conn_max_age=600)}
-    DATABASES["default"]["OPTIONS"] = {"charset": "utf8mb4"}
+    DATABASES["default"]["OPTIONS"] = _mysql_options()
     DATABASES["default"]["TEST"] = {"CHARSET": "utf8mb4"}
 else:
     DATABASES = {
@@ -82,7 +135,7 @@ else:
             "PASSWORD": os.environ.get("MYSQL_PASSWORD", ""),
             "HOST": os.environ.get("MYSQL_HOST", "127.0.0.1"),
             "PORT": os.environ.get("MYSQL_PORT", "3306"),
-            "OPTIONS": {"charset": "utf8mb4"},
+            "OPTIONS": _mysql_options(),
             "TEST": {"CHARSET": "utf8mb4"},
         }
     }
@@ -103,6 +156,10 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Uploaded event posters. Served by Django in development; use object storage
+# (S3/GCS) via DEFAULT_FILE_STORAGE in production.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
@@ -123,13 +180,35 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ),
     "DEFAULT_PAGINATION_CLASS": None,
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+    ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/minute",
+        "user": "300/minute",
+        "auth": "10/minute",
+        "email": "5/hour",
+    },
     "EXCEPTION_HANDLER": "eventflow.exceptions.custom_exception_handler",
 }
 
+SPECTACULAR_SETTINGS = {
+    "TITLE": "EventFlow API",
+    "DESCRIPTION": "Event ticketing & seat booking platform — auth, events, holds, bookings, Razorpay payments + webhook, tickets, coupons, support.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
+
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
     "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # Google Sign-In: OAuth 2.0 Client ID the backend trusts when verifying
@@ -161,3 +240,42 @@ SUPPORT_PHONE = os.environ.get("SUPPORT_PHONE", "")
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS", "http://localhost:5173"
 ).split(",")
+
+# --- Production payments (Razorpay, INR) ---
+# Secret keys live ONLY in backend env vars — never expose to React.
+PAYMENT_PROVIDER = os.environ.get("PAYMENT_PROVIDER", "razorpay")
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", os.environ.get("PAYMENT_KEY_ID", ""))
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", os.environ.get("PAYMENT_KEY_SECRET", ""))
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", os.environ.get("PAYMENT_WEBHOOK_SECRET", ""))
+# Comma-separated list of trusted webhook source IPs (optional extra check).
+PAYMENT_WEBHOOK_ALLOWED_IPS = [
+    ip.strip() for ip in os.environ.get("PAYMENT_WEBHOOK_ALLOWED_IPS", "").split(",") if ip.strip()
+]
+
+# --- Booking money math ---
+PLATFORM_FEE_PERCENT = float(os.environ.get("PLATFORM_FEE_PERCENT", "2.0"))
+TAX_PERCENT = float(os.environ.get("TAX_PERCENT", "0.0"))
+SEAT_HOLD_MINUTES = int(os.environ.get("SEAT_HOLD_MINUTES", "8"))
+CANCELLATION_WINDOW_HOURS = int(os.environ.get("CANCELLATION_WINDOW_HOURS", "24"))
+
+# --- Structured logging (never log secrets / card data) ---
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"default": {"format": "[{levelname}] {asctime} {name}: {message}", "style": "{"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
+    "root": {"handlers": ["console"], "level": os.environ.get("LOG_LEVEL", "INFO")},
+}
+
+# Test runs disable API throttling (repeated logins in tests are not abuse).
+import sys as _sys
+
+if "test" in _sys.argv:
+    REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+        "anon": "10000/minute", "user": "10000/minute",
+        "auth": "10000/minute", "email": "10000/minute",
+    }
+
+
+

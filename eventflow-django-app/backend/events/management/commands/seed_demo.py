@@ -18,14 +18,15 @@ class Command(BaseCommand):
         admin = User.objects.create_user(
             username="admin@eventflow.dev", email="admin@eventflow.dev", password="password123",
             first_name="Ada", last_name="Admin", role="admin", is_staff=True, is_superuser=True,
+            email_verified=True,
         )
         organizer = User.objects.create_user(
             username="organizer@eventflow.dev", email="organizer@eventflow.dev", password="password123",
-            first_name="Oli", last_name="Organizer", role="organizer",
+            first_name="Oli", last_name="Organizer", role="organizer", email_verified=True,
         )
         User.objects.create_user(
             username="attendee@eventflow.dev", email="attendee@eventflow.dev", password="password123",
-            first_name="Alex", last_name="Attendee", role="attendee",
+            first_name="Alex", last_name="Attendee", role="attendee", email_verified=True,
         )
 
         now = timezone.now()

@@ -1,0 +1,1 @@
+<p>Hi {{ user.first_name|default:user.email }},</p><p>Payment of <strong>&#8377;{{ payment.amount }}</strong> received for <strong>{{ event.title }}</strong>.</p><p>Booking <strong>{{ booking.reference }}</strong> ({{ booking.quantity }} ticket(s)).</p><p><a href="{{ frontend_url }}/my-bookings">View your tickets</a></p><p>The EventFlow team</p>

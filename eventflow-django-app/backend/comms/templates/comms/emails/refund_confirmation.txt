@@ -1,0 +1,7 @@
+Hi {{ user.first_name|default:user.email }},
+
+Your refund of Rs.{{ refund.amount }} for booking {{ booking.reference }} ({{ event.title }}) is {{ refund.status }}.
+It should reach your original payment method within 5-7 business days.
+
+The EventFlow team
+

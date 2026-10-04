@@ -113,3 +113,42 @@ def send_event_update_email(user, event, changes):
         "event_update",
         {"user": user, "event": event, "changes": changes},
     )
+
+
+def send_verification_email(user, code):
+    return send_email(
+        user.email,
+        "Verify your EventFlow account",
+        "verification",
+        {"user": user, "code": code},
+    )
+
+
+def send_password_reset_email(user, raw_token):
+    from django.conf import settings as _s
+
+    reset_url = f"{_s.FRONTEND_URL}/reset-password?token={raw_token}"
+    return send_email(
+        user.email,
+        "Reset your EventFlow password",
+        "password_reset",
+        {"user": user, "reset_url": reset_url, "raw_token": raw_token},
+    )
+
+
+def send_payment_confirmation_email(user, payment, booking):
+    return send_email(
+        user.email,
+        f"Payment received — {booking.reference} (₹{payment.amount})",
+        "payment_confirmation",
+        {"user": user, "payment": payment, "booking": booking, "event": booking.event},
+    )
+
+
+def send_refund_confirmation_email(user, booking, refund):
+    return send_email(
+        user.email,
+        f"Refund processed — {booking.reference}",
+        "refund_confirmation",
+        {"user": user, "booking": booking, "refund": refund, "event": booking.event},
+    )

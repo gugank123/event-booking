@@ -3,13 +3,14 @@
 The same ticketing/booking platform as before, rebuilt with:
 
 - **Backend:** Django + Django REST Framework, JWT auth
-  (`djangorestframework-simplejwt`), SQLite (a real SQL database, zero setup
-  — swap the one `DATABASES` block in `settings.py` for Postgres/MySQL
-  whenever you're ready).
+  (`djangorestframework-simplejwt`), MySQL (PyMySQL; `MYSQL_URL` or the
+  `MYSQL_*` vars in `backend/.env`).
 - **Frontend:** React + Vite, React Router, plain CSS (unchanged design —
   same ticket-stub visual style as the Node version).
-- **Payments:** simulated checkout only, same as before — the API validates
-  that a card looks card-shaped and always "succeeds."
+- **Payments:** real Razorpay Checkout (UPI/cards/netbanking, INR) with
+  server-side signature verification + idempotent webhook. Without gateway
+  keys the API issues clearly-marked `order_TEST_*` orders for local flow
+  testing — no fake "always succeeds" card charge remains.
 
 Two folders, two separate things to run:
 
@@ -79,13 +80,16 @@ frontend/
 
 ## What's included
 
-- **Auth:** email + password login and signup, JWT sessions
-  (`/api/auth/register/`, `/api/auth/login/`), role chosen at signup
+- **Auth:** email + password login and signup with 6-digit email verification
+  (hashed, expiring, rate-limited), JWT sessions with rotation + blacklist
+  (`/api/auth/register/`, `/api/auth/verify-email/`, `/api/auth/login/`,
+  `/api/auth/logout/`, `/api/auth/forgot-password/`,
+  `/api/auth/reset-password/`), role chosen at signup
   (attendee or organizer — admin is granted through Django admin or the
   in-app admin panel, never self-assigned).
-- **Attendees:** browse/search/filter published events, pick a ticket type
-  and quantity, run through a simulated checkout, view and cancel their own
-  bookings.
+- **Attendees:** browse/search/filter published events, hold seats (8-min timer)
+  or pick a quantity, apply coupons, pay via Razorpay, view QR tickets and pay
+  pending bookings from My Bookings, cancel per policy with gateway refunds.
 - **Organizers:** create events with one or more ticket types, see a live
   attendee roster and revenue per event, cancel an event.
 - **Admins:** platform-wide stats, promote/suspend users, cancel or restore
@@ -167,14 +171,38 @@ venv\Scripts\python manage.py test      # 12 workflow tests (auth, booking, comm
 
 Or double-click `start_app.bat` (starts MySQL if needed, Django, React, Chrome).
 
+## Post Event (organizers)
+
+Organizers post from **＋ Post an event** (navbar, homepage hero, or
+`/organizer/new`). The form covers: basic info + organizer contact, poster
+upload (JPG/PNG/WebP ≤ 5 MB) or image URL with preview, dates + booking
+window, full venue (address/state/pincode/map link), ticket tiers (price,
+quantity, per-user cap, sale window), and reserved-seating setup
+(sections → rows × seats, e.g. VIP ₹1500 rows A-B).
+
+Flow: **Save Draft → Preview** (pixel-identical event page with a back-to-edit
+banner) **→ Publish**. Drafts are invisible publicly (list + direct URL 404
+for outsiders). My Events (`/organizer`) shows image, stats, and actions:
+View, Edit, Preview, Publish/Unpublish, Cancel, Duplicate, Delete draft
+(deletion blocked while confirmed bookings exist). Date/venue/cancellation
+edits auto-notify confirmed attendees (in-app + email).
+
+Customers only ever see `published` events; booking enforces the booking
+window, per-user caps, live availability (no overselling), and exact seat
+picking for reserved events. Prices display in USD; seat labels and booking
+emails adapt automatically.
+
+```bash
+cd backend
+venv\Scripts\python manage.py seed_showcase   # 9 extra demo events + reviews
+venv\Scripts\python manage.py test events     # 13 post-event workflow tests
+```
+
 ## Going further
 
-- **Real payments:** replace the validation in `bookings/serializers.py`
-  (`CheckoutSerializer`) with a real Stripe PaymentIntent confirmation
-  before marking a booking `confirmed`.
-- **Email:** send booking confirmations after checkout instead of only
-  showing the reference in-app.
-- **Token refresh:** the frontend currently stores the JWT access/refresh
-  pair but only uses the access token; wire up `/api/auth/token/refresh/`
-  if you want sessions to survive past the access token's lifetime
-  (currently 1 day) without a full re-login.
+- **Docs:** live OpenAPI at `/api/docs/` (auth, holds, booking, Razorpay
+  order/verify/webhook, tickets, coupons).
+- **Background jobs:** `expire_holds`, `send_reminders`, `cleanup_auth`
+  management commands — schedule them as cron (see `DEPLOY.md`).
+- **Token refresh:** the frontend stores the JWT pair and silently refreshes
+  the access token (60-min lifetime) via `/api/auth/token/refresh/`.

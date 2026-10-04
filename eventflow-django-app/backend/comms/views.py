@@ -202,7 +202,7 @@ class ConversationListView(APIView):
             f"New enquiry: {data['subject']}",
             f"{request.user.email} wrote about {event.title}.",
             category=Notification.Category.MESSAGE,
-            link=f"/organizer/conversations/{conv.id}",
+            link=f"/messages/{conv.id}",
             event=event,
         )
         return Response(serialize_conversation(conv, request), status=201)

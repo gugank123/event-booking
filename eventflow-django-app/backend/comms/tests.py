@@ -19,21 +19,21 @@ class PlatformTests(APITestCase):
         self.admin = User.objects.create_user(
             username="admin@eventflow.dev", email="admin@eventflow.dev",
             password="password123", role=User.Role.ADMIN,
-            first_name="Ada", last_name="Admin",
+            first_name="Ada", last_name="Admin", email_verified=True,
         )
         self.organizer = User.objects.create_user(
             username="organizer@eventflow.dev", email="organizer@eventflow.dev",
             password="password123", role=User.Role.ORGANIZER,
-            first_name="Oli", last_name="Organizer",
+            first_name="Oli", last_name="Organizer", email_verified=True,
         )
         self.attendee = User.objects.create_user(
             username="attendee@eventflow.dev", email="attendee@eventflow.dev",
             password="password123", role=User.Role.ATTENDEE,
-            first_name="Alex", last_name="Attendee",
+            first_name="Alex", last_name="Attendee", email_verified=True,
         )
         self.other = User.objects.create_user(
             username="other@eventflow.dev", email="other@eventflow.dev",
-            password="password123", role=User.Role.ATTENDEE,
+            password="password123", role=User.Role.ATTENDEE, email_verified=True,
         )
         now = timezone.now()
         self.event = Event.objects.create(
@@ -57,13 +57,24 @@ class PlatformTests(APITestCase):
     def book(self, headers, qty=1):
         return self.client.post(
             "/api/bookings/",
-            {"eventId": self.event.id, "ticketTypeId": self.ticket.id, "quantity": qty,
-             "cardNumber": "4242424242424242", "expiry": "12/30", "cvc": "123"},
+            {"eventId": self.event.id, "ticketTypeId": self.ticket.id, "quantity": qty},
             format="json", **headers,
         )
 
-    # 1-2. registration + login
+    def confirm_booking(self, headers, booking_id):
+        res = self.client.post("/api/payments/create-order/", {"booking_id": booking_id},
+                               format="json", **headers)
+        self.assertEqual(res.status_code, 201, res.content)
+        res = self.client.post(
+            "/api/payments/verify/",
+            {"order_id": res.json()["order_id"], "payment_id": "pay_TEST_1", "signature": "test"},
+            format="json", **headers)
+        self.assertEqual(res.status_code, 200, res.content)
+
+    # 1-2. registration (unverified) -> verify -> login
     def test_register_and_login(self):
+        from accounts.models import EmailVerification
+
         res = self.client.post(
             "/api/auth/register/",
             {"name": "Nina New", "email": "nina@eventflow.dev",
@@ -71,6 +82,18 @@ class PlatformTests(APITestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 201)
+        self.assertTrue(res.json().get("needs_verification"))
+        # Login blocked until verified.
+        res = self.client.post(
+            "/api/auth/login/",
+            {"email": "nina@eventflow.dev", "password": "supersecret1"}, format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        user = User.objects.get(email="nina@eventflow.dev")
+        _ev, code = EmailVerification.issue(user)
+        res = self.client.post("/api/auth/verify-email/",
+                               {"email": "nina@eventflow.dev", "code": code}, format="json")
+        self.assertEqual(res.status_code, 200)
         self.assertIn("access", res.json())
         res = self.client.post(
             "/api/auth/login/",
@@ -91,7 +114,7 @@ class PlatformTests(APITestCase):
     def test_organizer_cannot_edit_others_event(self):
         other_org = User.objects.create_user(
             username="org2@eventflow.dev", email="org2@eventflow.dev",
-            password="password123", role=User.Role.ORGANIZER,
+            password="password123", role=User.Role.ORGANIZER, email_verified=True,
         )
         self.client.force_authenticate(user=other_org)
         res = self.client.put(f"/api/events/{self.event.id}/", {"title": "Hijacked"}, format="json")
@@ -113,13 +136,15 @@ class PlatformTests(APITestCase):
         a = self.auth("attendee@eventflow.dev")
         res = self.book(a, qty=2)
         self.assertEqual(res.status_code, 201)
-        res = self.book(a, qty=999)
+        res = self.book(a, qty=9)  # only 8 of 10 remain
         self.assertEqual(res.status_code, 409)
 
-    # 7. organizer -> user message (broadcast)
+    # 7. organizer -> user message (broadcast to confirmed attendees)
     def test_broadcast_to_attendees(self):
         a, o = self.auth("attendee@eventflow.dev"), self.auth("organizer@eventflow.dev")
-        self.assertEqual(self.book(a).status_code, 201)
+        res = self.book(a)
+        self.assertEqual(res.status_code, 201)
+        self.confirm_booking(a, res.json()["booking"]["id"])
         res = self.client.post(
             "/api/comms/broadcast/",
             {"event_id": self.event.id, "audience": "event",
@@ -163,13 +188,11 @@ class PlatformTests(APITestCase):
             Invitation.objects.get(token=token).status, Invitation.Status.ACCEPTED
         )
 
-    # 11-12. booking notification + mark read
+    # 11-12. booking hold notification + mark read (confirmation email arrives after payment)
     def test_booking_notification_and_read(self):
-        from django.core import mail
-
         a = self.auth("attendee@eventflow.dev")
-        self.assertEqual(self.book(a).status_code, 201)
-        self.assertEqual(len(mail.outbox), 1)  # confirmation email
+        res = self.book(a)
+        self.assertEqual(res.status_code, 201)
         note = Notification.objects.filter(user=self.attendee, category="BOOKING").first()
         self.assertIsNotNone(note)
         res = self.client.get("/api/comms/notifications/unread-count/", **a)
@@ -191,10 +214,12 @@ class PlatformTests(APITestCase):
         self.assertEqual(res.status_code, 201)
         self.assertEqual(SupportTicket.objects.get(pk=tid).status, SupportTicket.Status.IN_PROGRESS)
 
-    # 15. event cancellation notifies attendees
+    # 15. event cancellation notifies confirmed attendees
     def test_cancellation_notifies(self):
         a, o = self.auth("attendee@eventflow.dev"), self.auth("organizer@eventflow.dev")
-        self.assertEqual(self.book(a).status_code, 201)
+        res = self.book(a)
+        self.assertEqual(res.status_code, 201)
+        self.confirm_booking(a, res.json()["booking"]["id"])
         res = self.client.put(
             f"/api/events/{self.event.id}/", {"status": "cancelled"}, format="json", **o
         )

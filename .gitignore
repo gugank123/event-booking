@@ -1,0 +1,4 @@
+eventflow-django-app/backend/backend.log
+eventflow-django-app/backend/*.log
+.DS_Store
+Thumbs.db

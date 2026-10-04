@@ -7,7 +7,8 @@ import { Stars } from '../components/Stars';
 import { formatDate, formatMoney, lowestPrice } from '../utils/format';
 
 const ORDERINGS = [
-  { value: 'starts_at', label: 'Date: soonest' },
+  { value: 'starts_at', label: 'Upcoming' },
+  { value: 'newest', label: 'Newest' },
   { value: '-starts_at', label: 'Date: latest' },
   { value: 'popular', label: 'Most popular' },
   { value: 'rating', label: 'Top rated' },
@@ -26,6 +27,9 @@ export default function Home() {
   const [ordering, setOrdering] = useState('starts_at');
   const [featuredOnly, setFeaturedOnly] = useState(false);
   const [trendingOnly, setTrendingOnly] = useState(false);
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -51,6 +55,9 @@ export default function Home() {
     if (ordering) params.set('ordering', ordering);
     if (featuredOnly) params.set('featured', 'true');
     if (trendingOnly) params.set('trending', 'true');
+    if (availableOnly) params.set('availability', 'available');
+    if (priceMin !== '') params.set('price_min', priceMin);
+    if (priceMax !== '') params.set('price_max', priceMax);
     params.set('page', String(page));
 
     api
@@ -62,11 +69,11 @@ export default function Home() {
       })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
-  }, [search, category, dateFrom, dateTo, ordering, featuredOnly, trendingOnly, page]);
+  }, [search, category, dateFrom, dateTo, ordering, featuredOnly, trendingOnly, availableOnly, priceMin, priceMax, page]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, category, dateFrom, dateTo, ordering, featuredOnly, trendingOnly]);
+  }, [search, category, dateFrom, dateTo, ordering, featuredOnly, trendingOnly, availableOnly, priceMin, priceMax]);
 
   useEffect(load, [load]);
 
@@ -78,6 +85,9 @@ export default function Home() {
     setOrdering('starts_at');
     setFeaturedOnly(false);
     setTrendingOnly(false);
+    setAvailableOnly(false);
+    setPriceMin('');
+    setPriceMax('');
     setPage(1);
   }
 
@@ -211,6 +221,28 @@ export default function Home() {
           To
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </label>
+        <label>
+          Min $
+          <input
+            type="number"
+            min="0"
+            placeholder="0"
+            value={priceMin}
+            onChange={(e) => setPriceMin(e.target.value)}
+            style={{ width: '5.5rem' }}
+          />
+        </label>
+        <label>
+          Max $
+          <input
+            type="number"
+            min="0"
+            placeholder="Any"
+            value={priceMax}
+            onChange={(e) => setPriceMax(e.target.value)}
+            style={{ width: '5.5rem' }}
+          />
+        </label>
         <button
           type="button"
           className={`toggle-pill ${featuredOnly ? 'is-on' : ''}`}
@@ -224,6 +256,13 @@ export default function Home() {
           onClick={() => setTrendingOnly((v) => !v)}
         >
           ▲ Trending
+        </button>
+        <button
+          type="button"
+          className={`toggle-pill ${availableOnly ? 'is-on' : ''}`}
+          onClick={() => setAvailableOnly((v) => !v)}
+        >
+          ✓ Available
         </button>
       </div>
 

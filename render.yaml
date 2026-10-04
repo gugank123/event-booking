@@ -5,7 +5,7 @@ services:
     plan: free
     buildCommand: "./build.sh"
     startCommand: "gunicorn eventflow.wsgi:application --bind 0.0.0.0:$PORT --workers 2"
-    rootDir: backend
+    rootDir: eventflow-django-app/backend
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.0
@@ -18,6 +18,8 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: MYSQL_URL
+        sync: false
+      - key: MYSQL_SSL_CA_CONTENT
         sync: false
       - key: FRONTEND_URL
         sync: false
@@ -41,3 +43,17 @@ services:
         value: support@eventflow.dev
       - key: SUPPORT_PHONE
         value:
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: PLATFORM_FEE_PERCENT
+        value: 2.0
+      - key: TAX_PERCENT
+        value: 0.0
+      - key: SEAT_HOLD_MINUTES
+        value: 8
+      - key: CANCELLATION_WINDOW_HOURS
+        value: 24

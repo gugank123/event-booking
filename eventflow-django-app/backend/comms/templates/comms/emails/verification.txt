@@ -1,0 +1,10 @@
+Hi {{ user.first_name|default:user.email }},
+
+Welcome to EventFlow! Verify your account with this 6-digit code:
+
+{{ code }}
+
+This code expires in 15 minutes. If you didn't create an account, ignore this email.
+
+The EventFlow team
+

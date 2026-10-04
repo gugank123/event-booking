@@ -20,6 +20,10 @@ export default function Login() {
       await login(email, password);
       navigate(location.state?.from || '/');
     } catch (err) {
+      if (/verify your email/i.test(err.message)) {
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
       setError(err.message);
     } finally {
       setSubmitting(false);
@@ -69,6 +73,9 @@ export default function Login() {
           {submitting ? 'Logging in…' : 'Log in'}
         </button>
       </form>
+      <p className="muted">
+        <Link to="/forgot-password">Forgot your password?</Link>
+      </p>
       <p className="muted">
         New here? <Link to="/register">Create an account</Link>
       </p>

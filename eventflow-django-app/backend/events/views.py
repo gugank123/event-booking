@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.db import models
 from django.db.models import Avg, Count, Min, Q, Sum
 from django.utils.dateparse import parse_date
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -13,6 +16,7 @@ from .serializers import (
     EventReadSerializer,
     EventUpdateSerializer,
     ReviewSerializer,
+    SeatSerializer,
     TicketTypeSerializer,
     WishlistSerializer,
 )
@@ -55,7 +59,26 @@ class EventListCreateView(APIView):
             review_count=Count("reviews", distinct=True),
             tickets_sold=Sum("ticket_types__quantity_sold"),
             min_price=Min("ticket_types__price"),
+            bookings_count=Count("bookings", distinct=True),
         )
+
+        price_min = request.query_params.get("price_min")
+        if price_min not in (None, ""):
+            try:
+                events = events.filter(min_price__gte=float(price_min))
+            except ValueError:
+                pass
+        price_max = request.query_params.get("price_max")
+        if price_max not in (None, ""):
+            try:
+                events = events.filter(min_price__lte=float(price_max))
+            except ValueError:
+                pass
+        if request.query_params.get("availability") == "available":
+            events = events.filter(
+                Q(ticket_types__quantity_sold__lt=models.F("ticket_types__quantity_total"))
+                | Q(seats__status="available")
+            ).distinct()
 
         ordering = request.query_params.get("ordering", "starts_at")
         if ordering == "popular" or request.query_params.get("trending") == "true":
@@ -66,6 +89,8 @@ class EventListCreateView(APIView):
             events = events.order_by("min_price", "starts_at")
         elif ordering == "price_high":
             events = events.order_by("-min_price", "starts_at")
+        elif ordering == "newest":
+            events = events.order_by("-created_at")
         elif ordering == "-starts_at":
             events = events.order_by("-starts_at")
         else:
@@ -107,10 +132,63 @@ class EventCategoriesView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        categories = list(
+        from .models import EventCategory
+
+        cats = list(
             Event.objects.filter(status=Event.Status.PUBLISHED).values_list("category", flat=True).distinct()
         )
-        return Response({"categories": categories})
+        curated = list(EventCategory.objects.filter(is_active=True).values("name", "slug"))
+        merged = sorted(set(cats) | {c["name"] for c in curated})
+        return Response({"categories": merged, "curated": curated})
+
+
+class OrganizerDashboardView(APIView):
+    """Backend-computed organizer stats: totals, per-event occupancy/revenue."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from bookings.models import Booking
+
+        if request.user.role not in ("organizer", "admin"):
+            from rest_framework.exceptions import PermissionDenied as _PD
+
+            raise _PD("Organizer access required.")
+        events = Event.objects.filter(organizer=request.user).prefetch_related("ticket_types", "seats")
+        total_revenue = Decimal("0.00")
+        total_sold = 0
+        total_refunded = 0
+        per_event = []
+        for e in events:
+            confirmed = e.bookings.filter(status="confirmed")
+            revenue = sum((b.total_amount for b in confirmed), start=Decimal("0.00"))
+            sold = sum((b.quantity for b in confirmed), start=0)
+            seats_total = e.seats.count()
+            seats_booked = e.seats.filter(status="booked").count()
+            seats_held = e.seats.filter(status="held").count()
+            refunds = e.bookings.filter(status__in=["refunded", "cancelled"]).count()
+            total_revenue += revenue
+            total_sold += sold
+            total_refunded += refunds
+            capacity = sum((t.quantity_total for t in e.ticket_types.all()), start=0) or seats_total
+            occupancy = round(100 * sold / capacity, 1) if capacity else 0
+            per_event.append({"id": e.id, "title": e.title, "status": e.status,
+                              "starts_at": e.starts_at, "revenue": revenue, "tickets_sold": sold,
+                              "capacity": capacity, "occupancy": occupancy,
+                              "seats_total": seats_total, "seats_booked": seats_booked,
+                              "seats_held": seats_held,
+                              "seats_available": seats_total - seats_booked - seats_held,
+                              "refunds": refunds})
+        per_event.sort(key=lambda d: d["revenue"], reverse=True)
+        return Response({"totals": {"events": events.count(),
+                                    "published": events.filter(status="published").count(),
+                                    "revenue": total_revenue, "tickets_sold": total_sold,
+                                    "refunds": total_refunded},
+                         "events": per_event,
+                         "recent_bookings": EventRosterBookingSerializer(
+                             Booking.objects.filter(event__organizer=request.user)
+                             .select_related("user", "event", "ticket_type")
+                             .order_by("-created_at")[:20], many=True).data})
 
 
 class EventDetailView(APIView):
@@ -132,6 +210,15 @@ class EventDetailView(APIView):
             ),
             pk=pk,
         )
+        # Drafts (and other non-public states) are visible only to the
+        # event's organizer or an admin — never to the public by URL.
+        if event.status != Event.Status.PUBLISHED and not (
+            request.user.is_authenticated
+            and (request.user.role == "admin" or event.organizer_id == request.user.id)
+        ):
+            return Response({"error": "Event not found."}, status=404)
+        if event.seating_type == Event.SeatingType.RESERVED:
+            event._prefetched_seats = list(event.seats.all()[:2000])
         data = EventReadSerializer(
             event,
             context={"request": request, "wishlist_ids": wishlist_ids_for(request.user)},
@@ -196,6 +283,137 @@ class TicketTypeCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         ticket_type = serializer.save(event=event)
         return Response({"ticketType": TicketTypeSerializer(ticket_type).data}, status=201)
+
+
+class EventDuplicateView(APIView):
+    """Copy an event (plus ticket types) into a new draft."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        event = get_object_or_404(Event.objects.prefetch_related("ticket_types"), pk=pk)
+        if not (request.user.role == "admin" or event.organizer_id == request.user.id):
+            raise PermissionDenied("You don't have permission to duplicate this event.")
+        new_event = Event.objects.create(
+            organizer=event.organizer,
+            title=f"{event.title} (copy)",
+            short_description=event.short_description,
+            description=event.description,
+            category=event.category,
+            organizer_contact=event.organizer_contact,
+            venue=event.venue,
+            address=event.address,
+            city=event.city,
+            state=event.state,
+            pincode=event.pincode,
+            map_link=event.map_link,
+            starts_at=event.starts_at,
+            ends_at=event.ends_at,
+            booking_opens_at=event.booking_opens_at,
+            booking_closes_at=event.booking_closes_at,
+            seating_type=event.seating_type,
+            image_url=event.image_url,
+            status=Event.Status.DRAFT,
+        )
+        for tt in event.ticket_types.all():
+            TicketType.objects.create(
+                event=new_event, name=tt.name, price=tt.price,
+                quantity_total=tt.quantity_total, max_per_user=tt.max_per_user,
+                sale_start=tt.sale_start, sale_end=tt.sale_end,
+            )
+        return Response({"event": EventReadSerializer(new_event).data}, status=201)
+
+
+class EventSeatSetupView(APIView):
+    """Configure reserved seating: sections with rows generate the seat map.
+
+    Body: {"sections": [{"name": "VIP", "price": 1500, "rows": ["A","B"], "seats_per_row": 10}]}
+    Existing seats are replaced (only when nothing is booked yet).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import Seat
+
+        event = get_object_or_404(Event, pk=pk)
+        if not (request.user.role == "admin" or event.organizer_id == request.user.id):
+            raise PermissionDenied("You don't have permission to edit this event.")
+        sections = request.data.get("sections")
+        if not sections or not isinstance(sections, list):
+            return Response({"error": "Provide a list of seating sections."}, status=400)
+        if event.bookings.filter(status="confirmed").exists():
+            return Response(
+                {"error": "This event already has bookings — seating can't be reconfigured."},
+                status=409,
+            )
+        seats = []
+        seen = set()
+        for section in sections:
+            name = (section.get("name") or "").strip()
+            rows = section.get("rows") or []
+            try:
+                price = float(section.get("price", 0))
+                per_row = int(section.get("seats_per_row", 0))
+            except (TypeError, ValueError):
+                return Response({"error": f"Invalid price/row size in section '{name}'."}, status=400)
+            if not name or not rows or per_row < 1 or price < 0:
+                return Response(
+                    {"error": "Each section needs a name, at least one row, seats_per_row >= 1 and price >= 0."},
+                    status=400,
+                )
+            for row in rows:
+                row = str(row).strip().upper()
+                if not row:
+                    return Response({"error": "Row labels can't be empty."}, status=400)
+                for number in range(1, per_row + 1):
+                    key = (row, number)
+                    if key in seen:
+                        return Response(
+                            {"error": f"Duplicate seat {row}{number} across sections."}, status=400
+                        )
+                    seen.add(key)
+                    seats.append(
+                        Seat(event=event, section=name, row_label=row, number=number, price=price)
+                    )
+        if not seats:
+            return Response({"error": "No seats to create."}, status=400)
+        event.seats.all().delete()
+        Seat.objects.bulk_create(seats)
+        event.seating_type = Event.SeatingType.RESERVED
+        event.save(update_fields=["seating_type", "updated_at"])
+        created = event.seats.count()
+        return Response({"seats_created": created}, status=201)
+
+    def get(self, request, pk):
+        from .models import Seat
+
+        event = get_object_or_404(Event, pk=pk)
+        seats = event.seats.order_by("section", "row_label", "number")
+        return Response({"seats": SeatSerializer(seats, many=True).data})
+
+
+class EventImageUploadView(APIView):
+    """Upload/replace the event poster. Validates type and size (max 5 MB)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        event = get_object_or_404(Event, pk=pk)
+        if not (request.user.role == "admin" or event.organizer_id == request.user.id):
+            raise PermissionDenied("You don't have permission to edit this event.")
+        upload = request.data.get("image")
+        if upload is None:
+            return Response({"error": "Attach an image file as 'image'."}, status=400)
+        content_type = getattr(upload, "content_type", "")
+        if content_type not in ("image/jpeg", "image/png", "image/webp"):
+            return Response({"error": "Only JPG, PNG or WebP images are allowed."}, status=400)
+        if upload.size > 5 * 1024 * 1024:
+            return Response({"error": "Image must be 5 MB or smaller."}, status=400)
+        if event.image:
+            event.image.delete(save=False)
+        event.image.save(upload.name, upload, save=True)
+        return Response({"image_url": event.display_image}, status=201)
 
 
 class EventBookingsView(APIView):

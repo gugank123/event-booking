@@ -4,6 +4,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import EventDetail from './pages/EventDetail';
 import MyBookings from './pages/MyBookings';
 import Wishlist from './pages/Wishlist';
@@ -30,6 +33,9 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/events/:id" element={<EventDetail />} />
           <Route
             path="/my-bookings"
@@ -111,6 +117,22 @@ export default function App() {
             element={
               <ProtectedRoute roles={['organizer', 'admin']}>
                 <OrganizerEventForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/events/:id/edit"
+            element={
+              <ProtectedRoute roles={['organizer', 'admin']}>
+                <OrganizerEventForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/events/:id/preview"
+            element={
+              <ProtectedRoute roles={['organizer', 'admin']}>
+                <EventDetail preview />
               </ProtectedRoute>
             }
           />

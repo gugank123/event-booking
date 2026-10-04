@@ -44,8 +44,8 @@ Render and Vercel both deploy from a Git repo.
 
 1. Sign up at https://render.com (GitHub login works).
 2. **New → Web Service → connect your `eventflow` repo.**
-   - Render detects `render.yaml` and pre-fills everything.
-   - **Root Directory:** `backend` (important — the blueprint sets this).
+   - Render detects `render.yaml` (repo root) and pre-fills everything.
+   - **Root Directory:** `eventflow-django-app/backend` (important — the blueprint sets this).
    - Plan: **Free**.
 3. Before hitting Deploy, fill the `sync: false` environment variables:
    - `MYSQL_URL` → paste from Railway.
@@ -107,8 +107,45 @@ Vercel (`VITE_GOOGLE_CLIENT_ID`) env vars and redeploy both.
 ## 5. Check it works
 
 - Open the Vercel URL → events load (proves site → API → MySQL chain).
-- Register an account, book a ticket, open `/notifications`.
+- Register an account, verify the emailed code, book a ticket, open `/notifications`.
 - Render logs show request logs; Railway shows DB size/queries.
+
+## 6. Real payments with Razorpay (INR, test mode first)
+
+1. Sign up at https://dashboard.razorpay.com → Settings → API Keys → generate
+   **Test** keys. Put them on Render as `RAZORPAY_KEY_ID` /
+   `RAZORPAY_KEY_SECRET` (keep `PAYMENT_PROVIDER=razorpay`).
+2. Webhooks: Razorpay Dashboard → Settings → Webhooks → Add endpoint
+   `https://YOUR-API.onrender.com/api/payments/webhook/`, subscribe to
+   `payment.captured` + `payment.failed`. Copy the webhook secret into
+   `RAZORPAY_WEBHOOK_SECRET` on Render.
+3. Test end-to-end in Test mode: hold seats → pay with a Razorpay test card/UPI
+   → booking flips to `confirmed`, tickets + QR appear in `/my-bookings`.
+4. Going live: generate **Live** keys, replace the env vars, re-test once with a
+   small real payment and refund it. Never commit keys; the frontend only ever
+   receives the public `key_id` per order from `/api/payments/create-order/`.
+5. Money flow: customer → Razorpay → your merchant account → bank settlement per
+   your Razorpay KYC. No card/UPI data touches this codebase.
+
+## 7. Cron jobs (seat-hold expiry, reminders, cleanup)
+
+Without these, held seats never release. On Render add **Cron Jobs**
+(same repo, `backend/` root dir):
+
+| Schedule | Command | Purpose |
+|---|---|---|
+| `* * * * *` | `python manage.py expire_holds` | release expired seat holds |
+| `0 * * * *` | `python manage.py send_reminders` | 24h reminders, mark completed |
+| `0 3 * * *` | `python manage.py cleanup_auth` | purge old codes/tokens |
+
+Locally: `venv\Scripts\python backend\manage.py expire_holds` etc.
+
+## 8. Email in production
+
+Render env: `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`,
+`EMAIL_HOST/PORT/USER/PASSWORD` (Gmail → App Password), `DEFAULT_FROM_EMAIL`,
+`FRONTEND_URL=https://YOUR-SITE.vercel.app`. Verification, reset, booking,
+payment, refund and reminder mails use these automatically.
 
 ## Troubleshooting
 

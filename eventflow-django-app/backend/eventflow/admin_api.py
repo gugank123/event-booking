@@ -4,7 +4,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import User
+from accounts.models import AuditLog, User
 from accounts.serializers import UserSerializer
 from bookings.models import Booking
 from events.models import Event
@@ -60,6 +60,9 @@ class AdminUserUpdateView(APIView):
         if status_val in ("active", "suspended"):
             user.is_active = status_val == "active"
         user.save()
+        AuditLog.objects.create(user=request.user, action="admin.user_updated",
+                                object_type="User", object_id=str(user.id),
+                                metadata={"role": user.role, "active": user.is_active})
         return Response({"user": UserSerializer(user).data})
 
 
@@ -83,3 +86,15 @@ class AdminEventsView(APIView):
                 }
             )
         return Response({"events": data})
+
+
+class AuditLogListView(APIView):
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        logs = AuditLog.objects.select_related("user").order_by("-created_at")[:200]
+        return Response({"logs": [
+            {"id": l.id, "action": l.action, "user": l.user.email if l.user else None,
+             "object_type": l.object_type, "object_id": l.object_id,
+             "ip": l.ip_address, "metadata": l.metadata, "created_at": l.created_at}
+            for l in logs]})
