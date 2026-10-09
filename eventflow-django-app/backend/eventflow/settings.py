@@ -68,14 +68,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "eventflow.wsgi.application"
 
-# MySQL is the database. Locally the MYSQL_* vars in backend/.env are used;
-# on hosting platforms a single MYSQL_URL (e.g. Railway's connection string
-# or Aiven's service URI) takes precedence when set.
+# MySQL is the database. Connection values come from one of (first set wins):
+#   1. DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD (e.g. Railway TCP proxy)
+#   2. MYSQL_URL (e.g. Railway/Aiven connection string)
+#   3. MYSQL_DATABASE/MYSQL_USER/MYSQL_PASSWORD/MYSQL_HOST/MYSQL_PORT (local)
 # Aiven MySQL *requires* SSL with its CA certificate, so this block also
 # supports MYSQL_SSL_CA / MYSQL_SSL_CA_CONTENT (see below).
-# PyMySQL is the driver (pure Python).
+# Driver is mysqlclient (MySQLdb). If it is ever missing on a host, the
+# PyMySQL fallback below keeps the app booting with the same ENGINE.
 import dj_database_url
 import tempfile
+
+try:
+    import MySQLdb  # noqa: F401  (mysqlclient — the production driver)
+except ImportError:  # pragma: no cover
+    import pymysql
+
+    pymysql.install_as_MySQLdb()
 
 
 def _mysql_options():
@@ -114,7 +123,9 @@ def _mysql_options():
     if ca_file is None:
         local_ca = BASE_DIR / "ca.pem"
         if local_ca.is_file() and (
-            os.environ.get("MYSQL_URL", "") or "aivencloud" in os.environ.get("MYSQL_HOST", "")
+            os.environ.get("MYSQL_URL", "")
+            or "aivencloud" in os.environ.get("MYSQL_HOST", "")
+            or "aivencloud" in os.environ.get("DB_HOST", "")
         ):
             ca_file = local_ca
     if ca_file is not None:
@@ -122,7 +133,21 @@ def _mysql_options():
     return options
 
 
-if os.environ.get("MYSQL_URL"):
+if os.environ.get("DB_HOST"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ.get("DB_NAME", "railway"),
+            "USER": os.environ.get("DB_USER", "root"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+            "HOST": os.environ["DB_HOST"],
+            "PORT": os.environ.get("DB_PORT", "3306"),
+            "OPTIONS": _mysql_options(),
+            "TEST": {"CHARSET": "utf8mb4"},
+            "CONN_MAX_AGE": 600,
+        }
+    }
+elif os.environ.get("MYSQL_URL"):
     DATABASES = {"default": dj_database_url.parse(os.environ["MYSQL_URL"], conn_max_age=600)}
     DATABASES["default"]["OPTIONS"] = _mysql_options()
     DATABASES["default"]["TEST"] = {"CHARSET": "utf8mb4"}

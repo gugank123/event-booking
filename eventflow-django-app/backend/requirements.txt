@@ -7,6 +7,7 @@ drf-spectacular>=0.27
 google-auth>=2.0
 requests>=2.31
 PyMySQL>=1.1
+mysqlclient>=2.2  # primary MySQL driver (MySQLdb); PyMySQL stays as fallback
 python-dotenv>=1.0
 gunicorn>=21.0
 whitenoise>=6.0
