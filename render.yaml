@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn eventflow.wsgi:application --bind 0.0.0.0:$PORT --workers 2"
+    startCommand: "/bin/sh -c 'gunicorn eventflow.wsgi:application --bind 0.0.0.0:$PORT --workers 2'"
     rootDir: eventflow-django-app/backend
     envVars:
       - key: PYTHON_VERSION
