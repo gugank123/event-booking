@@ -81,10 +81,13 @@ import tempfile
 
 try:
     import MySQLdb  # noqa: F401  (mysqlclient — the production driver)
+
+    _DB_DRIVER = "mysqlclient"
 except ImportError:  # pragma: no cover
     import pymysql
 
     pymysql.install_as_MySQLdb()
+    _DB_DRIVER = "pymysql-fallback"
 
 
 def _mysql_options():
@@ -144,13 +147,15 @@ if os.environ.get("DB_HOST"):
             "PORT": os.environ.get("DB_PORT", "3306"),
             "OPTIONS": _mysql_options(),
             "TEST": {"CHARSET": "utf8mb4"},
-            "CONN_MAX_AGE": 600,
+            "CONN_MAX_AGE": 60,
+            "CONN_HEALTH_CHECKS": True,
         }
     }
 elif os.environ.get("MYSQL_URL"):
-    DATABASES = {"default": dj_database_url.parse(os.environ["MYSQL_URL"], conn_max_age=600)}
+    DATABASES = {"default": dj_database_url.parse(os.environ["MYSQL_URL"], conn_max_age=60)}
     DATABASES["default"]["OPTIONS"] = _mysql_options()
     DATABASES["default"]["TEST"] = {"CHARSET": "utf8mb4"}
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 else:
     DATABASES = {
         "default": {
@@ -164,6 +169,13 @@ else:
             "TEST": {"CHARSET": "utf8mb4"},
         }
     }
+
+import logging as _logging
+
+_logging.getLogger(__name__).info(
+    "DB driver=%s host=%s db=%s", _DB_DRIVER,
+    (DATABASES["default"].get("HOST") or "?"), DATABASES["default"].get("NAME"),
+)
 
 AUTH_USER_MODEL = "accounts.User"
 
