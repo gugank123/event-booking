@@ -50,7 +50,7 @@ export default function AdminDashboard() {
         <h1>Admin</h1>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <Link className="btn btn--primary btn--sm" to="/organizer/new">
-            ＋ Post event
+            + Post event
           </Link>
           <Link className="btn btn--ghost btn--sm" to="/organizer">
             Manage events

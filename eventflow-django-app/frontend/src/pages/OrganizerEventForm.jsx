@@ -295,7 +295,7 @@ export default function OrganizerEventForm() {
                 {categories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
-                <option value="__custom">＋ New category…</option>
+                <option value="__custom">+ New category…</option>
               </select>
             </label>
             {category === '__custom' && (

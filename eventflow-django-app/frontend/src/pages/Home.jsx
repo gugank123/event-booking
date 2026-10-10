@@ -131,10 +131,10 @@ export default function Home() {
           transition={{ duration: 0.55, delay: 0.25 }}
         >
           <a className="btn btn--primary" href="#browse">
-            🎟 Book an event
+            Book an event
           </a>
           <Link className="btn btn--ghost" to="/post-event">
-            ＋ Post an event
+            + Post an event
           </Link>
         </motion.div>
         <motion.div

@@ -18,24 +18,6 @@ function loadRazorpay() {
   });
 }
 
-function downloadTicket(ticket, booking) {
-  const text = [
-    'EVENTFLOW TICKET',
-    `Ticket: ${ticket.ticket_number}`,
-    `Booking: ${ticket.bookingReference}`,
-    `Event: ${ticket.eventTitle}`,
-    `Seat: ${ticket.seatLabel || `${booking.quantity} x ${booking.ticketTypeName}`}`,
-    `Status: ${ticket.status}`
-  ].join('\n');
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${ticket.ticket_number}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function MyBookings() {
   const { token, user } = useAuth();
   const [bookings, setBookings] = useState([]);
@@ -222,9 +204,9 @@ export default function MyBookings() {
                       <div key={t.id} style={{ textAlign: 'center' }}>
                         <TicketQR value={t.qr_token} label={t.ticket_number} />
                         <p className="muted">{t.seatLabel || `${b.quantity} × ${b.ticketTypeName}`} · {t.status}</p>
-                        <button className="btn btn--ghost btn--sm" onClick={() => downloadTicket(t, b)}>
-                          Download
-                        </button>
+                        <Link className="btn btn--ghost btn--sm" to={`/tickets/${t.id}`}>
+                          Ticket / Print
+                        </Link>
                       </div>
                     ))}
                     {(b.tickets || []).length === 0 && (

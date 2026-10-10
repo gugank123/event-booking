@@ -88,7 +88,7 @@ export default function OrganizerDashboard() {
             Customer messages
           </Link>
           <Link className="btn btn--primary" to="/organizer/new">
-            ＋ Post event
+            + Post event
           </Link>
         </div>
       </div>
@@ -113,7 +113,7 @@ export default function OrganizerDashboard() {
           <h3>No events yet.</h3>
           <p>Post your first event to start selling tickets.</p>
           <Link className="btn btn--primary" to="/organizer/new" style={{ marginTop: '1rem' }}>
-            ＋ Post event
+            + Post event
           </Link>
         </div>
       ) : (

@@ -3,85 +3,83 @@ import { api } from '../api/client';
 
 const AuthContext = createContext(null);
 
+// Session tokens live in memory only. The short-lived access token is kept
+// in React state (+ a ref mirror for stable async access); the long-lived
+// refresh token lives in an HttpOnly cookie managed by the backend, so no
+// token secret ever touches localStorage.
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem('eventflow_access'));
+  const [token, setToken] = useState(null);
+  const tokenRef = useRef(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const refreshTimer = useRef(null);
 
-  function clearSession() {
+  // One-time migration: drop tokens stored by older app versions.
+  useEffect(() => {
     localStorage.removeItem('eventflow_access');
     localStorage.removeItem('eventflow_refresh');
-    setToken(null);
+  }, []);
+
+  function setAccess(value) {
+    tokenRef.current = value;
+    setToken(value);
+  }
+
+  function clearSession() {
+    setAccess(null);
     setUser(null);
+    localStorage.removeItem('eventflow_access');
+    localStorage.removeItem('eventflow_refresh');
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
   }
 
   const refreshAccess = useCallback(async () => {
-    const refresh = localStorage.getItem('eventflow_refresh');
-    if (!refresh) return null;
     try {
-      const data = await api.post('/auth/token/refresh/', { refresh });
-      localStorage.setItem('eventflow_access', data.access);
-      if (data.refresh) localStorage.setItem('eventflow_refresh', data.refresh);
-      setToken(data.access);
+      // No body needed: the backend reads the HttpOnly refresh cookie.
+      const data = await api.post('/auth/refresh/', {});
+      if (!data.access) throw new Error('refresh failed');
+      setAccess(data.access);
       scheduleRefresh();
       return data.access;
     } catch {
       clearSession();
       return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function scheduleRefresh() {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    // Access tokens live 60 min — refresh silently at 50 min.
+    // Access tokens live 60 min — rotate silently at 50 min.
     refreshTimer.current = setTimeout(() => refreshAccess(), 50 * 60 * 1000);
   }
 
   useEffect(() => {
     let cancelled = false;
-    async function loadUser(activeToken) {
-      if (!activeToken) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const data = await api.get('/auth/me/', activeToken);
-        if (!cancelled) {
-          setUser(data.user);
-          scheduleRefresh();
+    async function boot() {
+      const next = await refreshAccess();
+      if (cancelled) return;
+      if (next) {
+        try {
+          const data = await api.get('/auth/me/', next);
+          if (!cancelled) setUser(data.user);
+        } catch {
+          if (!cancelled) clearSession();
         }
-      } catch (err) {
-        // Access may have expired — try the refresh token once before giving up.
-        if (!cancelled) {
-          const next = await refreshAccess();
-          if (next) {
-            try {
-              const data = await api.get('/auth/me/', next);
-              if (!cancelled) setUser(data.user);
-            } catch {
-              if (!cancelled) clearSession();
-            }
-          } else if (!cancelled) {
-            clearSession();
-          }
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
+      if (!cancelled) setLoading(false);
     }
-    loadUser(token);
+    boot();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
   function persistSession(data) {
-    localStorage.setItem('eventflow_access', data.access);
-    localStorage.setItem('eventflow_refresh', data.refresh);
-    setToken(data.access);
+    // data.refresh (if present) is intentionally ignored: the refresh
+    // token already arrived as an HttpOnly cookie on this response.
+    setAccess(data.access);
     setUser(data.user);
     scheduleRefresh();
   }
@@ -126,14 +124,15 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
-    const refresh = localStorage.getItem('eventflow_refresh');
     try {
-      if (token) await api.post('/auth/logout/', { refresh }, token);
+      // Server blacklists the cookie refresh token and clears the cookie.
+      await api.post('/auth/logout/', {}, tokenRef.current);
     } catch {
       // best-effort — still clear local state
     }
     clearSession();
-  }, [token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AuthContext.Provider

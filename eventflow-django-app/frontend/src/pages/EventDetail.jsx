@@ -238,7 +238,7 @@ export default function EventDetail({ preview = false }) {
       <div>
         {preview && (
           <div className="preview-banner">
-            <span>👁 Preview — this is exactly how attendees see this event{event.status !== 'published' ? ` (currently ${event.status})` : ''}.</span>
+            <span>Preview — this is exactly how attendees see this event{event.status !== 'published' ? ` (currently ${event.status})` : ''}.</span>
             <Link className="btn btn--primary btn--sm" to={`/organizer/events/${event.id}/edit`}>
               Back to editing
             </Link>

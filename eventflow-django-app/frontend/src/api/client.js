@@ -17,6 +17,9 @@ async function request(path, { method = 'GET', body, token } = {}) {
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
+      // Include cookies so the HttpOnly refresh cookie travels on
+      // same-origin and allow-listed cross-origin (Vercel -> Render) calls.
+      credentials: 'include',
       body: body ? JSON.stringify(body) : undefined
     });
   } catch (err) {

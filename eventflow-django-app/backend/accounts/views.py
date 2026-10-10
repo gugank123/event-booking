@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import AuditLog, EmailVerification, PasswordResetToken, User
 from .serializers import LoginSerializer, RegisterSerializer, UserSerializer, tokens_for
@@ -71,6 +72,34 @@ def _audit(user, action, request=None, **meta):
         logger.exception("audit failed %s", action)
 
 
+def _set_refresh_cookie(response, refresh_token):
+    """Store the refresh token in an HttpOnly cookie (never in JS storage)."""
+    response.set_cookie(
+        settings.JWT_COOKIE_NAME,
+        refresh_token,
+        max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+        secure=settings.JWT_COOKIE_SECURE,
+        httponly=True,
+        samesite=settings.JWT_COOKIE_SAMESITE,
+        path=settings.JWT_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response):
+    response.delete_cookie(settings.JWT_COOKIE_NAME, path=settings.JWT_COOKIE_PATH)
+
+
+def _origin_ok(request):
+    """CSRF guard for cookie-mutating auth endpoints: when the browser sends
+    an Origin, it must be one we serve. Missing Origin (curl/apps) is allowed."""
+    origin = (request.META.get("HTTP_ORIGIN") or "").rstrip("/")
+    if not origin:
+        return True
+    allowed = {o.strip().rstrip("/") for o in settings.CORS_ALLOWED_ORIGINS if o.strip()}
+    allowed.add(settings.FRONTEND_URL)
+    return origin in allowed
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]
@@ -123,7 +152,10 @@ class VerifyEmailView(APIView):
 
         send_welcome_email(user)
         _audit(user, "auth.verified", request, email=email)
-        return Response({**tokens_for(user), "user": UserSerializer(user).data})
+        tokens = tokens_for(user)
+        response = Response({**tokens, "user": UserSerializer(user).data})
+        _set_refresh_cookie(response, tokens["refresh"])
+        return response
 
 
 class ResendVerificationView(APIView):
@@ -163,21 +195,27 @@ class LoginView(APIView):
         user = serializer.validated_data["user"]
         _audit(user, "auth.login", request)
         logger.info("login user id=%s", user.id)
-        return Response({**tokens_for(user), "user": UserSerializer(user).data})
+        tokens = tokens_for(user)
+        response = Response({**tokens, "user": UserSerializer(user).data})
+        _set_refresh_cookie(response, tokens["refresh"])
+        return response
 
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        refresh = (request.data.get("refresh") or "").strip()
+        # Prefer the HttpOnly cookie; accept a body token for older clients.
+        refresh = request.COOKIES.get(settings.JWT_COOKIE_NAME) or (request.data.get("refresh") or "").strip()
         if refresh:
             try:
                 RefreshToken(refresh).blacklist()
             except Exception:
                 pass
         _audit(request.user, "auth.logout", request)
-        return Response({"detail": "Logged out."})
+        response = Response({"detail": "Logged out."})
+        _clear_refresh_cookie(response)
+        return response
 
 
 class ForgotPasswordView(APIView):
@@ -240,6 +278,47 @@ class MeView(APIView):
         return Response({"user": UserSerializer(request.user).data})
 
 
+class CookieTokenRefreshView(TokenRefreshView):
+    """Rotate the session using the HttpOnly refresh cookie.
+
+    Reuses SimpleJWT's rotation + blacklist machinery (same as the legacy
+    body-token endpoint). The fresh refresh token is re-planted as a cookie;
+    only the short-lived access token is ever returned in the body.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(tags=["auth"],
+                   description="Rotate session from the HttpOnly refresh cookie. Returns a fresh access token.")
+    def post(self, request, *args, **kwargs):
+        if not _origin_ok(request):
+            return Response({"error": "Cross-origin refresh not allowed."}, status=403)
+        cookie_token = request.COOKIES.get(settings.JWT_COOKIE_NAME, "")
+        body_token = (request.data.get("refresh") or "") if isinstance(request.data, dict) else ""
+        refresh_token = cookie_token or (body_token or "").strip()
+        if not refresh_token:
+            return Response({"error": "No active session. Please log in again."}, status=401)
+        # Feed SimpleJWT's stock serializer (rotation + blacklist enforced).
+        try:
+            mutable = request.data.copy()
+        except Exception:
+            mutable = {}
+        try:
+            mutable["refresh"] = refresh_token
+        except Exception:
+            mutable = {"refresh": refresh_token}
+        request._full_data = mutable
+        try:
+            response = super().post(request, *args, **kwargs)
+        except Exception:
+            return Response({"error": "Session expired. Please log in again."}, status=401)
+        if response.status_code == 200 and isinstance(response.data, dict):
+            new_refresh = response.data.get("refresh")
+            if new_refresh:
+                _set_refresh_cookie(response, new_refresh)
+        return response
+
+
 class GoogleLoginView(APIView):
     """Real Google Sign-In. Frontend posts {idToken}; we verify server-side."""
 
@@ -299,4 +378,7 @@ class GoogleLoginView(APIView):
                 user.save(update_fields=["email_verified"])
             _audit(user, "auth.google_login", request)
 
-        return Response({**tokens_for(user), "user": UserSerializer(user).data})
+        tokens = tokens_for(user)
+        response = Response({**tokens, "user": UserSerializer(user).data})
+        _set_refresh_cookie(response, tokens["refresh"])
+        return response

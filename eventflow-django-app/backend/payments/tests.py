@@ -51,6 +51,54 @@ def auth(client, user):
 
 
 class AuthFlowTests(TestCase):
+    def test_cookie_session_login_refresh_logout(self):
+        u = make_user()
+        c = Client()
+        r = c.post("/api/auth/login/", {"email": u.email, "password": "StrongPass123!"},
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        # Refresh token arrives as HttpOnly cookie, never JS-readable.
+        morsel = r.cookies.get("eventflow_refresh")
+        self.assertIsNotNone(morsel)
+        self.assertIn("HttpOnly", morsel.output())
+        access = r.json()["access"]
+        # Authenticated call with the memory access token.
+        r = c.get("/api/auth/me/", HTTP_AUTHORIZATION=f"Bearer {access}")
+        self.assertEqual(r.status_code, 200)
+        # Silent rotation via cookie alone (no body).
+        r = c.post("/api/auth/refresh/", content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertIn("access", r.json())
+        self.assertIsNotNone(r.cookies.get("eventflow_refresh"))
+        # Logout blacklists + clears the cookie.
+        r = c.post("/api/auth/logout/", HTTP_AUTHORIZATION=f"Bearer {access}",
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.cookies.get("eventflow_refresh").value, "")
+        # Rotated-out refresh token is dead.
+        r = c.post("/api/auth/refresh/", content_type="application/json")
+        self.assertEqual(r.status_code, 401)
+
+    def test_refresh_rejects_foreign_origin(self):
+        u = make_user()
+        c = Client()
+        c.post("/api/auth/login/", {"email": u.email, "password": "StrongPass123!"},
+               content_type="application/json")
+        r = c.post("/api/auth/refresh/", content_type="application/json",
+                   HTTP_ORIGIN="https://evil.example")
+        self.assertEqual(r.status_code, 403)
+
+    def test_legacy_body_refresh_still_works(self):
+        u = make_user()
+        c = Client()
+        r = c.post("/api/auth/login/", {"email": u.email, "password": "StrongPass123!"},
+                   content_type="application/json")
+        refresh = r.json()["refresh"]
+        r = c.post("/api/auth/token/refresh/", {"refresh": refresh},
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("access", r.json())
+
     def test_register_creates_unverified_and_verify_activates(self):
         c = Client()
         r = c.post("/api/auth/register/",
@@ -75,6 +123,7 @@ class AuthFlowTests(TestCase):
         r4 = c.post("/api/auth/verify-email/", {"email": "new@example.com", "code": code},
                     content_type="application/json")
         self.assertEqual(r4.status_code, 200, r4.content[:300])
+        self.assertIsNotNone(r4.cookies.get("eventflow_refresh"))
         u.refresh_from_db()
         self.assertTrue(u.email_verified)
         # Login now works.

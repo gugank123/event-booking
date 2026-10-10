@@ -9,12 +9,12 @@ const STEPS = [
 ];
 
 const PERKS = [
-  { icon: '🎟', title: 'Ticketing built in', text: 'Multiple ticket tiers, live availability, QR door entry and check-in.' },
-  { icon: '💬', title: 'Talk to attendees', text: 'Announcements, broadcasts and 1-to-1 conversations with your crowd.' },
-  { icon: '📊', title: 'Know your numbers', text: 'Revenue, tickets sold, attendee rosters and check-in stats per event.' },
-  { icon: '⭐', title: 'Ratings & discovery', text: 'Reviews, wishlist saves, featured spotlights and trending boosts.' },
-  { icon: '📩', title: 'Invitations', text: 'Invite guests by email with a shareable link and track responses.' },
-  { icon: '🔔', title: 'Auto-notifications', text: 'Date or venue changes notify every confirmed attendee for you.' }
+  { n: 'I', title: 'Ticketing built in', text: 'Multiple ticket tiers, live availability, QR door entry and check-in.' },
+  { n: 'II', title: 'Talk to attendees', text: 'Announcements, broadcasts and 1-to-1 conversations with your crowd.' },
+  { n: 'III', title: 'Know your numbers', text: 'Revenue, tickets sold, attendee rosters and check-in stats per event.' },
+  { n: 'IV', title: 'Ratings & discovery', text: 'Reviews, wishlist saves, featured spotlights and trending boosts.' },
+  { n: 'V', title: 'Invitations', text: 'Invite guests by email with a shareable link and track responses.' },
+  { n: 'VI', title: 'Auto-notifications', text: 'Date or venue changes notify every confirmed attendee for you.' }
 ];
 
 export default function PostEvent() {
@@ -43,7 +43,7 @@ export default function PostEvent() {
           </p>
           <div className="hero__cta">
             <Link className="btn btn--primary" to="/register">
-              ＋ Register as organizer
+              + Register as organizer
             </Link>
             {!user && (
               <Link className="btn btn--ghost" to="/login">
@@ -86,7 +86,7 @@ export default function PostEvent() {
             transition={{ duration: 0.4, delay: 0.1 + i * 0.06 }}
           >
             <h3>
-              {p.icon} {p.title}
+              <span className="perk-num">{p.n}</span> {p.title}
             </h3>
             <p>{p.text}</p>
           </motion.div>

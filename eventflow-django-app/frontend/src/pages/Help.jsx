@@ -85,7 +85,7 @@ export default function Help() {
       <h2>Still stuck?</h2>
       <div className="help-cards">
         <Link to="/support" className="help-card">
-          <h3>🎫 Support tickets</h3>
+          <h3>Support tickets</h3>
           <p>Open a ticket and track replies from our team.</p>
         </Link>
         <Link to="/support?tab=report" className="help-card">

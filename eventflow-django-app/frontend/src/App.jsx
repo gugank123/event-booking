@@ -1,6 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
+import { useAuth } from './context/AuthContext';
+import AuthEntry from './pages/AuthEntry';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -9,6 +11,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import EventDetail from './pages/EventDetail';
 import MyBookings from './pages/MyBookings';
+import TicketPage from './pages/TicketPage';
 import Wishlist from './pages/Wishlist';
 import OrganizerDashboard from './pages/OrganizerDashboard';
 import OrganizerEventForm from './pages/OrganizerEventForm';
@@ -30,7 +33,10 @@ export default function App() {
       <Navbar />
       <main>
         <Routes>
-          <Route path="/" element={<Home />} />
+          {/* Entry gateway: members see the programme, visitors meet the atelier. */}
+          <Route path="/" element={<EntryGateway />} />
+          {/* Public event browsing (unchanged Home experience). */}
+          <Route path="/browse" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
@@ -42,6 +48,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MyBookings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/:ticketId"
+            element={
+              <ProtectedRoute>
+                <TicketPage />
               </ProtectedRoute>
             }
           />
@@ -157,4 +171,12 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function EntryGateway() {
+  const { user, loading } = useAuth();
+  // Hold the door while the session resolves — never flash or loop.
+  if (loading) return <div className="page-loading">Preparing the programme…</div>;
+  if (user) return <Home />;
+  return <AuthEntry />;
 }

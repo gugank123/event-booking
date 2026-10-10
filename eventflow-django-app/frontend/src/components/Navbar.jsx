@@ -18,7 +18,7 @@ export default function Navbar() {
       </Link>
       <nav className="navbar__links">
         <Link to="/">Browse</Link>
-        <Link to="/post-event">＋ Post an event</Link>
+        <Link to="/post-event">+ Post an event</Link>
         {(user?.role === 'organizer' || user?.role === 'admin') && <Link to="/organizer">Manage events</Link>}
         {user?.role === 'admin' && <Link to="/admin">Admin</Link>}
         {user && <Link to="/my-bookings">My tickets</Link>}

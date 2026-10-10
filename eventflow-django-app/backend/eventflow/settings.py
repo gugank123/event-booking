@@ -254,6 +254,15 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
 }
 
+# --- Token transport ---
+# The access token lives in frontend memory only (never localStorage).
+# The refresh token travels as an HttpOnly cookie scoped to /api/auth/,
+# so JavaScript (and any injected script) cannot read or exfiltrate it.
+JWT_COOKIE_NAME = os.environ.get("JWT_COOKIE_NAME", "eventflow_refresh")
+JWT_COOKIE_PATH = "/api/auth/"
+JWT_COOKIE_SECURE = not DEBUG
+JWT_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"
+
 # Google Sign-In: OAuth 2.0 Client ID the backend trusts when verifying
 # ID tokens sent to POST /api/auth/google/. Get one at
 # https://console.cloud.google.com/apis/credentials (OAuth client, Web app).
@@ -283,6 +292,9 @@ SUPPORT_PHONE = os.environ.get("SUPPORT_PHONE", "")
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS", "http://localhost:5173"
 ).split(",")
+# Required so browsers send the HttpOnly refresh cookie cross-origin
+# (Vercel frontend -> Render API). Origins remain allow-listed above.
+CORS_ALLOW_CREDENTIALS = True
 
 # --- Production payments (Razorpay, INR) ---
 # Secret keys live ONLY in backend env vars — never expose to React.
