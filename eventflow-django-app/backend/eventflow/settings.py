@@ -278,6 +278,8 @@ EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
+# Bound SMTP so a slow mail server can never hang a web worker.
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "15"))
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "EventFlow <noreply@eventflow.dev>")
 
 # Public web address of the React app, used to build links inside emails.
